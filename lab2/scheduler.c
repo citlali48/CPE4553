@@ -5,8 +5,39 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <signal.h>
+#include <sys/time.h>
 #include "scheduler.h"
 #include "pqueue.h"
+
+//all timer handlers, and helpers
+static volatile sig_atomic_t quant_expired = 0; //flag
+
+static void alarm_handler(int sig){
+    (void)sig;
+    quant_expired = 1;
+}
+
+static void start_time(long quant){
+    struct itimerval timer = {0};
+
+    timer.it_value.tv_sec = quant / 1000; //put into seconds
+    timer.it_value.tv_usec = (quant % 1000) * 1000; //put into microseconds
+    //use ITMER_REAL so calculates real time, won't stop on wait
+    if(setitimer(ITIMER_REAL, &timer, NULL) == -1){
+        printf("Timer start failed.\n");
+        exit(1);
+    }
+}
+
+static void stop_time(){
+    struct itimerval timer = {0};
+
+    if(setitimer(ITIMER_REAL, &timer, NULL) == -1){
+        printf("Timer start failed.\n");
+        exit(1);
+    }
+}
 
 /*
 Your scheduler program should expect two parameters:
@@ -72,8 +103,6 @@ int main(int argc, char* argv[]){
         int param_idx = 0;
         const char* delim = " \t\n"; //get rid of whitespaces
         char* token = strtok(buff, delim); //have to get first token and then loop
-        //params[param_idx] = token;
-        //param_idx++;
 
         while(token != NULL){
             if(param_idx > 9){
@@ -104,9 +133,41 @@ int main(int argc, char* argv[]){
         proc->params = proc_params;
         printf("1 line read, 1 process created\n");
 
+        //fork child for process
+        pid_t pid = fork();
+
+        if(pid == 0){
+            raise(SIGSTOP); //stops here, continues after
+
+            //printf("Process has filename: %s, ID: %d, Priority %d\n", proc->fname, proc->id, proc->priority);
+
+            char path[128];
+            snprintf(path, 128, "./%s", proc->fname);
+            char **args = malloc((proc->param_cnt + 2) * sizeof(char*)); //for null term, and file path
+            args[0] = path;
+            for(int i = 0; i < proc->param_cnt; i++){
+                args[i+1] = proc->params[i];
+            }
+
+            args[proc->param_cnt + 1] = NULL; //null terminate for execvp
+
+            execvp(path, args);
+            printf("Execvp failed\n");
+            exit(1); //if execvp failed
+        } else {
+            int status;
+            if(waitpid(pid, &status, WUNTRACED) == -1){
+                printf("Waitpid failed.\n");
+                exit(1);
+            }
+
+            proc->pid = pid;
+        }
+
         //start creating nodes for linked list, and push into pqueue
         Node *cur_node = malloc(sizeof(Node));
         cur_node->process = proc;
+        cur_node->next = NULL;
         push(cur_node);
     }
 
@@ -118,30 +179,49 @@ int main(int argc, char* argv[]){
         //use execvp or other exec to run the process
     //if interrupted? have to add back to priority queue, check sigint stuff
 
+    struct sigaction sa = {0};
+    sa.sa_handler = alarm_handler;
+    sigemptyset(&sa.sa_mask);
+
+    if(sigaction(SIGALRM, &sa, NULL) == -1){
+        printf("Sigaction failed.\n");
+        exit(1);
+    }
+
     //process execution, running the pqueue
-    //first see if execvp and running any of these programs actually works
-
     printf("----------EXECUTING PROCS---------\n");
-    pid_t pid;
-    pid = fork();
-    if(pid == 0){//child
-        Process* p1 = peek();
-        printf("Process has filename: %s, ID: %d, Priority %d\n", p1->fname, p1->id, p1->priority);
 
-        char path[128];
-        snprintf(path, 128, "./%s", p1->fname);
-        char **args = malloc((p1->param_cnt + 2) * sizeof(char*)); //for null term, and file path
-        args[0] = path;
-        for(int i = 0; i < p1->param_cnt; i++){
-            args[i+1] = p1->params[i];
+
+    //run first process to completion
+    Process *first_proc = pop();
+    kill(first_proc->pid, SIGCONT); //continue the process
+    int status;
+    waitpid(first_proc->pid, &status, WUNTRACED); //wait on completion or sigalrm
+
+    Process *proc;
+    while((proc = pop()) != NULL){ //while still have stuff in pqueue
+        Process *next = peek(); //for comparison of priority
+        quant_expired = 0; //reset flags
+
+        if(next != NULL && next->priority == proc->priority){ //if equal priority, start time quantum
+            start_time(quantum);
         }
 
-        args[p1->param_cnt + 1] = NULL; //null terminate for execvp
+        kill(proc->pid, SIGCONT); //continue the process
 
-        execvp(path, args);
-        printf("Execvp failed\n");
-        exit(1); //if execvp failed
-    } else { //parent
-        wait(NULL);
+        int status;
+        pid_t wait_proc = waitpid(proc->pid, &status, WUNTRACED); //wait on completion or sigalrm
+        stop_time();
+        //printf("Signal occured.\n");
+
+        if(wait_proc == -1 && quant_expired){ //if interrupted by sigalrm, and flags set
+            //printf("Alarm went off, pausing process.\n");
+            kill(proc->pid, SIGSTOP); //pause process
+
+            //create node, process, add back to pqueue
+            Node *node = malloc(sizeof(Node));
+            node->process = proc;
+            push(node);
+        }
     }
 }

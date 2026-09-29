@@ -4,10 +4,14 @@
 Node* head = NULL;
 
 void push(Node* node){
-    if(head == NULL || node->process->priority < head->process->priority){//check if no head, or higher priority
+    if(head == NULL){//check if no head
         head = node;
         return;
-    } 
+    } else if(node->process->priority < head->process->priority){//if highest priority
+        node->next = head;
+        head = node;
+        return;
+    }
 
     Node *cur_node = head;
     while(cur_node->next != NULL && cur_node->next->process->priority <= node->process->priority) {
@@ -24,10 +28,10 @@ Process* pop(){
         return NULL;
     }
 
-    Node *pop_head = head;
-    Process *process = pop_head->process;
+    Node *temp = head;
+    Process *process = temp->process;
     head = head->next;
-    free(pop_head);
+    free(temp);
 
     return process;
 }

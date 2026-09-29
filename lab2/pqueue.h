@@ -11,5 +11,6 @@ typedef struct Node{
 
 void push(Node* node);
 Process* peek();
+Process* pop();
 
 #endif

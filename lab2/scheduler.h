@@ -15,6 +15,7 @@ typedef struct{
     char* fname;
     char** params;
     int param_cnt;
+    pid_t pid;
 } Process;
 
 #endif
