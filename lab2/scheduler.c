@@ -130,7 +130,7 @@ int main(int argc, char* argv[]){
             //set node as head
         //else
             //push to priority queue (using pqueue funcs)
-
+    }
     //once done reading, start running processes in pqueue
     //runs first process to completion
     //for rest set timer for time quantum
@@ -138,5 +138,8 @@ int main(int argc, char* argv[]){
         //pop off priority queue
         //use execvp or other exec to run the process
     //if interrupted? have to add back to priority queue, check sigint stuff
-    }
+
+    //process execution, running the pqueue
+    //first see if execvp and running any of these programs actually works
+    
 }
