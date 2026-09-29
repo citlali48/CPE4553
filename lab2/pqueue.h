@@ -10,6 +10,6 @@ typedef struct Node{
 } Node;
 
 void push(Node* node);
-Process* peak();
+Process* peek();
 
 #endif

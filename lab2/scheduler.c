@@ -109,7 +109,7 @@ int main(int argc, char* argv[]){
         cur_node->process = proc;
         push(cur_node);
     }
-    
+
     //once done reading, start running processes in pqueue
     //runs first process to completion
     //for rest set timer for time quantum
@@ -125,17 +125,18 @@ int main(int argc, char* argv[]){
     pid_t pid;
     pid = fork();
     if(pid == 0){//child
-        printf("Process has filename: %s, ID: %d, Priority %d\n", head->process->fname, head->process->id, head->process->priority);
+        Process* p1 = peek();
+        printf("Process has filename: %s, ID: %d, Priority %d\n", p1->fname, p1->id, p1->priority);
 
         char path[128];
-        snprintf(path, 128, "./%s", head->process->fname);
-        char **args = malloc((head->process->param_cnt + 2) * sizeof(char*)); //for null term, and file path
+        snprintf(path, 128, "./%s", p1->fname);
+        char **args = malloc((p1->param_cnt + 2) * sizeof(char*)); //for null term, and file path
         args[0] = path;
-        for(int i = 0; i < head->process->param_cnt; i++){
-            args[i+1] = head->process->params[i];
+        for(int i = 0; i < p1->param_cnt; i++){
+            args[i+1] = p1->params[i];
         }
 
-        args[head->process->param_cnt + 1] = NULL; //null terminate for execvp
+        args[p1->param_cnt + 1] = NULL; //null terminate for execvp
 
         execvp(path, args);
         printf("Execvp failed\n");

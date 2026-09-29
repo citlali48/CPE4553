@@ -6,6 +6,7 @@ Node* head = NULL;
 void push(Node* node){
     if(head == NULL || node->process->priority < head->process->priority){//check if no head, or higher priority
         head = node;
+        return;
     } 
 
     Node *cur_node = head;
@@ -31,7 +32,7 @@ Process* pop(){
     return process;
 }
 
-Process* peak(){
+Process* peek(){
     if(head == NULL){
         return NULL;
     }
