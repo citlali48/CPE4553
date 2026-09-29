@@ -83,21 +83,9 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    /*
-    Want to read:
-        a process identifier: any unique natural number.
-        a process priority: natural number from 0 to 127, with lower values indicating higher priority.
-        a process binary file
-        and optional parameters for the binary file.
-    Essentially, need to read at least 3 params but a variable number of parameters afterwards, can't we just read until a newline?
-    And save all params into param char* that is malloc()d, and when reading extra parameters we can count them (after we've gotten first 3)
-    to see how many parameters we read into the array so we can only take out those first couple indexes of parameters (since mallocd)
-    */
-
     //let's try a max of 10 parameters
     char** params = malloc(10 * sizeof(char *));
 
-    printf("--------------CREATING PROCS-----------------\n");
     char buff[256]; //hopefully won't exceed this
     while(fgets(buff, sizeof(buff), file) != NULL){ //read line at a time
         int param_idx = 0;
@@ -105,12 +93,7 @@ int main(int argc, char* argv[]){
         char* token = strtok(buff, delim); //have to get first token and then loop
 
         while(token != NULL){
-            if(param_idx > 9){
-                //TO DO: need to realloc
-                break;
-            }
             params[param_idx] = token;
-            printf("%s\n", token);
             token = strtok(NULL, delim); //all calls after use null
             param_idx++;
         }
@@ -122,7 +105,6 @@ int main(int argc, char* argv[]){
         proc->id = strtol(params[0], NULL, 10);
         proc->priority = strtol(params[1], NULL, 10);
         proc->fname = strdup(params[2]);
-        printf("Process file name: %s\n", proc->fname);
         proc->param_cnt = param_idx - 3;
 
         for (int i = 0; i < proc->param_cnt; i++){
@@ -131,15 +113,12 @@ int main(int argc, char* argv[]){
         }
 
         proc->params = proc_params;
-        printf("1 line read, 1 process created\n");
 
         //fork child for process
         pid_t pid = fork();
 
         if(pid == 0){
             raise(SIGSTOP); //stops here, continues after
-
-            //printf("Process has filename: %s, ID: %d, Priority %d\n", proc->fname, proc->id, proc->priority);
 
             char path[128];
             snprintf(path, 128, "./%s", proc->fname);
@@ -171,14 +150,7 @@ int main(int argc, char* argv[]){
         push(cur_node);
     }
 
-    //once done reading, start running processes in pqueue
-    //runs first process to completion
-    //for rest set timer for time quantum
-        //fork for process
-        //pop off priority queue
-        //use execvp or other exec to run the process
-    //if interrupted? have to add back to priority queue, check sigint stuff
-
+    //set up signal handler for timer going off
     struct sigaction sa = {0};
     sa.sa_handler = alarm_handler;
     sigemptyset(&sa.sa_mask);
@@ -188,10 +160,7 @@ int main(int argc, char* argv[]){
         exit(1);
     }
 
-    //process execution, running the pqueue
-    printf("----------EXECUTING PROCS---------\n");
-
-
+    //running the pqueue
     //run first process to completion
     Process *first_proc = pop();
     kill(first_proc->pid, SIGCONT); //continue the process
@@ -212,10 +181,8 @@ int main(int argc, char* argv[]){
         int status;
         pid_t wait_proc = waitpid(proc->pid, &status, WUNTRACED); //wait on completion or sigalrm
         stop_time();
-        //printf("Signal occured.\n");
 
         if(wait_proc == -1 && quant_expired){ //if interrupted by sigalrm, and flags set
-            //printf("Alarm went off, pausing process.\n");
             kill(proc->pid, SIGSTOP); //pause process
 
             //create node, process, add back to pqueue

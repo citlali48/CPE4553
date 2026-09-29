@@ -1,0 +1,2 @@
+Type in the 'make' command to compile all executable programs.
+Then run using the format ./scheduler time-ms file-name
