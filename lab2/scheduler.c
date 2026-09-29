@@ -16,7 +16,6 @@ A tab-separated file where each line in the file represents a process defined as
     a process priority: natural number from 0 to 127, with lower values indicating higher priority.
     a process binary file
     and optional parameters for the binary file.
-Your file can have any number of processes with any arbitrary number of parameters. An example for the input file:
 */
 
 int main(int argc, char* argv[]){
@@ -69,7 +68,6 @@ int main(int argc, char* argv[]){
 
     printf("--------------CREATING PROCS-----------------\n");
     char buff[256]; //hopefully won't exceed this
-    Node* head = NULL;
     while(fgets(buff, sizeof(buff), file) != NULL){ //read line at a time
         int param_idx = 0;
         const char* delim = " \t\n"; //get rid of whitespaces
@@ -106,21 +104,12 @@ int main(int argc, char* argv[]){
         proc->params = proc_params;
         printf("1 line read, 1 process created\n");
 
-        //start creating nodes for linked list
+        //start creating nodes for linked list, and push into pqueue
         Node *cur_node = malloc(sizeof(Node));
         cur_node->process = proc;
-        //**CHANGE THIS LOGIC LATER IN PQUEUE IMPLEMENTATION**
-        if(head == NULL){ //check if head
-            head = cur_node;
-        } else {
-            Node *start = head;
-            while(start->next != NULL) {
-                start = start->next;
-            }
-
-            start->next = cur_node;
-        }
+        push(cur_node);
     }
+    
     //once done reading, start running processes in pqueue
     //runs first process to completion
     //for rest set timer for time quantum
