@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "scheduler.h"
 #include "pqueue.h"
 
@@ -65,6 +67,7 @@ int main(int argc, char* argv[]){
     //let's try a max of 10 parameters
     char** params = malloc(10 * sizeof(char *));
 
+    printf("--------------CREATING PROCS-----------------\n");
     char buff[256]; //hopefully won't exceed this
     Node* head = NULL;
     while(fgets(buff, sizeof(buff), file) != NULL){ //read line at a time
@@ -97,7 +100,7 @@ int main(int argc, char* argv[]){
 
         for (int i = 0; i < proc->param_cnt; i++){
             //extra func params for process
-            proc_params[i] = strdup(params[i]);
+            proc_params[i] = strdup(params[i+3]); //since first 3 not func params
         }
 
         proc->params = proc_params;
@@ -117,19 +120,6 @@ int main(int argc, char* argv[]){
 
             start->next = cur_node;
         }
-
-    //read line by line and parse into arguments
-    //use fread
-    //create a process variable, and pass into a node variable to create the priority queue
-    //cur node, and head node variables declared
-    //while reading
-        //parse arguments
-        //create process with arguments
-        //create node for process, null next
-        //check if head is null still
-            //set node as head
-        //else
-            //push to priority queue (using pqueue funcs)
     }
     //once done reading, start running processes in pqueue
     //runs first process to completion
@@ -141,5 +131,27 @@ int main(int argc, char* argv[]){
 
     //process execution, running the pqueue
     //first see if execvp and running any of these programs actually works
-    
+
+    printf("----------EXECUTING PROCS---------\n");
+    pid_t pid;
+    pid = fork();
+    if(pid == 0){//child
+        printf("Process has filename: %s, ID: %d, Priority %d\n", head->process->fname, head->process->id, head->process->priority);
+
+        char path[128];
+        snprintf(path, 128, "./%s", head->process->fname);
+        char **args = malloc((head->process->param_cnt + 2) * sizeof(char*)); //for null term, and file path
+        args[0] = path;
+        for(int i = 0; i < head->process->param_cnt; i++){
+            args[i+1] = head->process->params[i];
+        }
+
+        args[head->process->param_cnt + 1] = NULL; //null terminate for execvp
+
+        execvp(path, args);
+        printf("Execvp failed\n");
+        exit(1); //if execvp failed
+    } else { //parent
+        wait(NULL);
+    }
 }
