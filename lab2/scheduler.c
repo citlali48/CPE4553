@@ -66,6 +66,7 @@ int main(int argc, char* argv[]){
     char** params = malloc(10 * sizeof(char *));
 
     char buff[256]; //hopefully won't exceed this
+    Node* head = NULL;
     while(fgets(buff, sizeof(buff), file) != NULL){ //read line at a time
         int param_idx = 0;
         const char* delim = " \t\n"; //get rid of whitespaces
@@ -75,7 +76,7 @@ int main(int argc, char* argv[]){
 
         while(token != NULL){
             if(param_idx > 9){
-                //need to realloc
+                //TO DO: need to realloc
                 break;
             }
             params[param_idx] = token;
@@ -84,25 +85,38 @@ int main(int argc, char* argv[]){
             param_idx++;
         }
 
-        Process proc;
+        //assign params/values to a process struct
+        Process *proc = malloc(sizeof(Process));
         char** proc_params = malloc(5 * sizeof(char *)); //don't think we'll need 5
-        for (int i = 0; i < param_idx; i++){
-            if(i == 0){ //process id
-                proc.id = strtol(params[i], NULL, 10);
-            } else if(i == 1){ //priority
-                proc.priority = strtol(params[i], NULL, 10);
-            } else if(i == 2){ //filename
-                proc.fname = strdup(params[i]);
-                printf("Process file name: %s", proc.fname);
-            } else if(i > 2){ //extra func params for process
-                proc_params[i-3] = strdup(params[i]);
-            }
+
+        proc->id = strtol(params[0], NULL, 10);
+        proc->priority = strtol(params[1], NULL, 10);
+        proc->fname = strdup(params[2]);
+        printf("Process file name: %s\n", proc->fname);
+        proc->param_cnt = param_idx - 3;
+
+        for (int i = 0; i < proc->param_cnt; i++){
+            //extra func params for process
+            proc_params[i] = strdup(params[i]);
         }
 
-        proc.params = proc_params;
-        proc.param_cnt = param_idx - 3;
+        proc->params = proc_params;
         printf("1 line read, 1 process created\n");
-    }
+
+        //start creating nodes for linked list
+        Node *cur_node = malloc(sizeof(Node));
+        cur_node->process = proc;
+        //**CHANGE THIS LOGIC LATER IN PQUEUE IMPLEMENTATION**
+        if(head == NULL){ //check if head
+            head = cur_node;
+        } else {
+            Node *start = head;
+            while(start->next != NULL) {
+                start = start->next;
+            }
+
+            start->next = cur_node;
+        }
 
     //read line by line and parse into arguments
     //use fread
@@ -124,4 +138,5 @@ int main(int argc, char* argv[]){
         //pop off priority queue
         //use execvp or other exec to run the process
     //if interrupted? have to add back to priority queue, check sigint stuff
+    }
 }

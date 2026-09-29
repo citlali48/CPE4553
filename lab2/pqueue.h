@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include "scheduler.h"
 
-typedef struct{
+typedef struct Node{
     Process* process;
     struct Node* next;
 } Node;
