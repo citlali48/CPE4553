@@ -261,11 +261,26 @@ tid_t lwp_wait(int *status){
 }
 
 void  lwp_set_scheduler(scheduler fun){
-    if(fun == NULL){
-        sched = &rr_publish;
-    } else {
-        //actually have to set schedulers
+    if(fun == NULL && sched != &rr_publish){ //no passed func, and not currently rr scheduler
+        fun = &rr_publish;
+    } else if(fun == NULL && sched == &rr_publish){ //if no passed func but already rr scheduler
+        return;
     }
+
+    //need to transfer contexts from old to new scheduler
+    scheduler old_sched = sched;
+    fun->init();
+
+    //remove from old_sched add to new
+    while(old_sched->qlen() > 0){
+        thread temp = old_sched->next();
+        old_sched->remove(temp);
+        fun->admit(temp);
+    }
+
+    //shut down old and set new
+    old_sched->shutdown();
+    sched = fun;
 }
 
 scheduler lwp_get_scheduler(void){
