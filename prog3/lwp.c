@@ -191,11 +191,73 @@ tid_t lwp_wait(int *status){
         //place on queue of waiting threads
         //and block
     //if multiple waiting threads?
-    if(sched->qlen() > 1){ //still threads in scheduler
-        //
+
+    thread term_thread;
+
+    if(exit_head == NULL){ //no threads in terminated fifo queue
+        //if no threads left to wait on
+        if(sched->qlen() <= 1){
+            return NO_THREAD;
+        }
+        //deschedue cur_thread sched->remove()
+        sched->remove(cur_thread);
+        //place in queue for waiting, wait_tail
+        if(wait_tail == NULL){ //empty waiting fifo queue
+            cur_thread->lib_two = NULL;
+            wait_tail = cur_thread;
+            wait_head = cur_thread;
+        } else {
+            cur_thread->lib_two = NULL;
+            wait_tail->lib_two = cur_thread;
+            wait_tail = cur_thread;
+        }
+        //block until a thread terminates
+        lwp_yield();
+
+        //once recieves terminated thread, in thread->exited
+        term_thread = cur_thread->exited;
+        cur_thread->exited = NULL;
     } else {
-        return NO_THREAD;
+        //return oldest waiting terminated, exit_head
+        term_thread = exit_head;
+        exit_head = exit_head->lib_two; //next term thread in fifo queue
+        if(exit_head == NULL){ //if after popping from queue its empty
+            exit_tail = NULL;
+        }
     }
+    
+    if(status != NULL){ //have to populat *status
+        *status = term_thread->status;
+    }
+
+    //free stuff, remove from valid, munmap (returns 0 on success)
+    tid_t exit_tid = term_thread->tid;
+    thread start = valid_t;
+    thread prev = NULL;
+    while(start != NULL){ //lib_one holds valid threads
+        if(start->tid == term_thread->tid){
+            //remove from list
+            break;
+        }
+        prev = start;
+        start = start->lib_one;
+    }
+
+    //take out of valid list
+    if(start != NULL){
+        if(prev == NULL){
+            valid_t = start->lib_one; //nothing before, so just remove and set to next
+        } else {
+            prev->lib_one = start->lib_one;
+        }
+    }
+    
+    if(term_thread->stack != NULL){ //if null, then original/calling thread
+        munmap(term_thread->stack, term_thread->stacksize);
+    }
+    free(term_thread);
+
+    return exit_tid;
 }
 
 void  lwp_set_scheduler(scheduler fun){
