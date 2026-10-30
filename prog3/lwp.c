@@ -11,8 +11,10 @@
 - current scheduler pointer
 - thread id count (what the newest one should be)
 - list of all valid threads for tid2thread (lib_one and lib_two reserved for lib use)
+    - Note: Using lib_one for this
 - fifo queue of terminated threads
     - so lwp_wait() can return oldest terminated thread
+    - Note: Using libtwo for this
 - fifo queue of waiting threads
     - if no terminated threads lwp_wait() has to block, so deschedule thread
       that called lwp_wait() (with sched->remove()) and place in wait queue
@@ -25,6 +27,12 @@ static thread cur_thread = NULL;
 
 //list of valid threads for tid2thread
 static thread valid_t = NULL;
+
+//fifo queue pointers of terminated and waiting threads
+static thread wait_head = NULL;
+static thread wait_tail = NULL;
+static thread exit_head = NULL;
+static thread exit_tail = NULL;
 
 //wrapper from instructions
 static void lwp_wrap(lwpfun fun, void* arg) {
@@ -99,9 +107,39 @@ tid_t lwp_create(lwpfun func, void * arg){
 void  lwp_exit(int status){
     //terminates current lwp
     //yields to thread in scheduler, doesn't return
-    //returns termination status: low 8 bits of passed in status
     //once thread is waited for in lwp_wait(), resources deallocated
     //  and uses lwp_yield()
+
+    //need to save to queue of terminated threads
+    thread term_thread = cur_thread;
+    //MKTERMSTAT combines low 8 bits of status and lwp_term flag
+    cur_thread->status = MKTERMSTAT(LWP_TERM, status);
+    sched->remove(term_thread);
+
+    if(wait_head != NULL){
+        thread wait_pop = wait_head;
+        wait_head = wait_head->lib_two; //set wait_head to next waiting thread
+
+        if(wait_head == NULL){ //if nothing left in queue, set tail to null too
+            wait_tail = NULL;
+        }
+
+        wait_pop->lib_two = NULL; //no longer wait queue, going to be scheduled
+        wait_pop->exited = term_thread; //associate term thread with oldest waiting
+        sched->admit(wait_pop);
+    } else {
+        term_thread->lib_two = NULL; //so doesn't point to any waiting threads, in term queue now
+
+        if(exit_tail != NULL){
+            exit_tail->lib_two = term_thread; //add to end of terminated fifo
+            exit_tail = term_thread;
+        } else {
+            exit_head = term_thread;
+            exit_tail = term_thread;
+        }
+    }
+
+    lwp_yield();
 }
 
 tid_t lwp_gettid(void){  
@@ -144,7 +182,21 @@ void  lwp_start(void){
 }
 
 tid_t lwp_wait(int *status){
-
+    //deallocated terminated thread resources
+    //reports termination status if not NULL
+    //returns tid of terminated thread
+    //if multiple terminated threads
+        //return oldest thread (first in FIFO) w/o blocking
+    //if no terminated threads
+        //deschedule sched->remove()
+        //place on queue of waiting threads
+        //and block
+    //if multiple waiting threads?
+    if(sched->qlen() > 1){ //still threads in scheduler
+        //
+    } else {
+        return NO_THREAD;
+    }
 }
 
 void  lwp_set_scheduler(scheduler fun){
