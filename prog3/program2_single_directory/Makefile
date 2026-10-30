@@ -39,10 +39,10 @@ liblwp.so: $(OBJS64)
 	$(CC) $(CFLAGS) -shared -o $@ $(OBJS64)
 
 snakes: randomsnakes.o AlwaysZero.c $(SHAREDLIBS)
-	$(CC) $(CFLAGS) -o snakes randomsnakes.o $(SNAKELIBS) $(SHAREDLIBS)
+	$(CC) $(CFLAGS) -o snakes randomsnakes.o $(SHAREDLIBS) $(SNAKELIBS)
 
 hungry: hungrysnakes.o AlwaysZero.c $(SHAREDLIBS)
-	$(CC) $(CFLAGS) -o hungry hungrysnakes.o $(SNAKELIBS) $(SHAREDLIBS)
+	$(CC) $(CFLAGS) -o hungry hungrysnakes.o $(SHAREDLIBS) $(SNAKELIBS)
 
 hungrysnakes.o: hungrysnakes.c AlwaysZero.c util.c lwp.h snakes.h
 	$(CC) $(CFLAGS) -c hungrysnakes.c -L. -llwp
