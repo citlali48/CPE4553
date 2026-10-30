@@ -112,6 +112,19 @@ tid_t lwp_gettid(void){
 }
 
 void  lwp_yield(void){
+    //save current lwp context
+    //pick next lwp from scheduler rrnext()
+    //if no next thread terminate program
+    //first see if have next thread, if so swap_rfiles to save context and do next
+    thread old_thread = cur_thread;
+    thread next_thread = sched->next();
+    if(next_thread == NULL){
+        exit(0);
+    }
+
+    cur_thread = next_thread;
+    //old thread context in rdi, new in rsi
+    swap_rfiles(&(old_thread->state), &(next_thread->state));
 
 }
 
