@@ -7,7 +7,7 @@
 #include "lwp.h"
 
 /* What we Need:
-- current thread pointer (context?)
+- current thread pointer context
 - current scheduler pointer
 - thread id count (what the newest one should be)
 - list of all valid threads for tid2thread (lib_one and lib_two reserved for lib use)
@@ -21,6 +21,7 @@
 
 static scheduler sched = &rr_publish;
 static tid_t tid_count = 1;
+static thread cur_thread = NULL;
 
 //list of valid threads for tid2thread
 static thread valid_t = NULL;
@@ -96,11 +97,18 @@ tid_t lwp_create(lwpfun func, void * arg){
 }
 
 void  lwp_exit(int status){
-
+    //terminates current lwp
+    //yields to thread in scheduler, doesn't return
+    //returns termination status: low 8 bits of passed in status
+    //once thread is waited for in lwp_wait(), resources deallocated
+    //  and uses lwp_yield()
 }
 
-tid_t lwp_gettid(void){
-
+tid_t lwp_gettid(void){  
+    if(cur_thread == NULL){
+        return NO_THREAD;
+    }
+    return cur_thread->tid;
 }
 
 void  lwp_yield(void){
@@ -110,11 +118,19 @@ void  lwp_yield(void){
 void  lwp_start(void){
     //converts calling/original thread to lwp by creating context
     //and admitting to scheduler
-    //don't allocate stack for it, use stack already has
+    //don't allocate stack for it, use stack already hasw
     //call lwp_yield
+    thread caller = calloc(1, sizeof(context));
+    caller->tid = tid_count++;
+    caller->status = LWP_LIVE;
+    cur_thread = caller;
+    caller->lib_one = valid_t;
+    valid_t = caller;
+    sched->admit(caller);
+    lwp_yield();
 }
 
-tid_t lwp_wait(int *){
+tid_t lwp_wait(int *status){
 
 }
 
@@ -123,9 +139,9 @@ void  lwp_set_scheduler(scheduler fun){
 }
 
 scheduler lwp_get_scheduler(void){
-
+    return sched;
 }
 
 thread tid2thread(tid_t tid){
-
+    //need to look at valid list of threads
 }
