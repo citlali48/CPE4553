@@ -18,7 +18,7 @@
 - fifo queue of waiting threads
     - if no terminated threads lwp_wait() has to block, so deschedule thread
       that called lwp_wait() (with sched->remove()) and place in wait queue
-- 
+    - Note: Using libtwo for this
 */
 
 static scheduler sched = &rr_publish;
@@ -163,7 +163,6 @@ void  lwp_yield(void){
     cur_thread = next_thread;
     //old thread context in rdi, new in rsi
     swap_rfiles(&(old_thread->state), &(next_thread->state));
-
 }
 
 void  lwp_start(void){
@@ -200,7 +199,11 @@ tid_t lwp_wait(int *status){
 }
 
 void  lwp_set_scheduler(scheduler fun){
-
+    if(fun == NULL){
+        sched = &rr_publish;
+    } else {
+        //actually have to set schedulers
+    }
 }
 
 scheduler lwp_get_scheduler(void){
@@ -209,4 +212,18 @@ scheduler lwp_get_scheduler(void){
 
 thread tid2thread(tid_t tid){
     //need to look at valid list of threads
+    //returns thread corresponding to tid
+    if(tid == NO_THREAD){ //invalid
+        return NULL;
+    }
+
+    thread start = valid_t;
+    while(start != NULL){ //lib_one holds valid threads
+        if(start->tid == tid){
+            return start;
+        }
+        start = start->lib_one;
+    }
+
+    return NULL;
 }
