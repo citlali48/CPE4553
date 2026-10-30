@@ -1,5 +1,6 @@
 #include <signal.h>
 #include <errno.h>
+#include <stdlib.h>
 #include "lwp.h"
 
 #ifdef PREEMPTIVE

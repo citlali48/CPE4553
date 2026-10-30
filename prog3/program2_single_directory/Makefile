@@ -19,7 +19,7 @@ clean:
 	rm -f $(OBJS) *~ TAGS *.a *.o nums hungry snakes liblwp.so
 
 nums: numbersmain.o $(SHAREDLIBS)
-	$(CC) $(CFLAGS) -g -o nums numbersmain.o $(SNAKELIBS) $(SHAREDLIBS)
+	$(CC) $(CFLAGS) -g -o nums numbersmain.o $(SHAREDLIBS) $(SNAKELIBS)
 
 numbersmain.o: numbersmain.c AlwaysZero.c lwp.h
 	$(CC) $(CFLAGS) -c numbersmain.c -L. -llwp
