@@ -11,7 +11,7 @@ typedef enum {
     fifo,
     lru,
     opt
-} PRA;
+} PRA; //page replacement algorithms
 
 //one page-table entry tells us which frame contains this page
 typedef struct {
@@ -25,14 +25,14 @@ typedef struct {
 
 //one TLB entry stores one page-to-frame translation
 typedef struct {
-    int page_num;
-    int frame_num;
+    int page_num; //key, used like idx for getting frame
+    int frame_num; //val
     bool valid;
 } TLBEntry;
 
 typedef struct {
     TLBEntry entries[TLB_SIZE];
-    int next_slot; //could do pointer or just index of next tlb entry
+    int next; //could do pointer or just index of next tlb entry
 } TLB;
 
 //backing store holds contents of virtual pages
@@ -131,13 +131,13 @@ int lookup_TLB(TLB *tlb, int page_num){
 
 //the TLB always uses rotating FIFO, regardless of the selected PRA
 void insert_TLB(TLB *tlb, int page_num, int frame_num){
-    int slot = tlb->next_slot;
+    int slot = tlb->next;
     tlb->entries[slot].page_num = page_num;
     tlb->entries[slot].frame_num = frame_num;
     tlb->entries[slot].valid = true;
 
     //wrap back to slot 0 after inserting into slot 15
-    tlb->next_slot = (slot + 1) % TLB_SIZE;
+    tlb->next = (slot + 1) % TLB_SIZE;
 }
 
 //remove a translation when its page is evicted from physical memory
@@ -148,7 +148,7 @@ void invalidate_TLB(TLB *tlb, int page_num){
         }
     }
 
-    //do not move next_slot or shift entries when invalidating a slot
+    //do not move next or shift entries when invalidating a slot
 }
 
 //return the resident frame number, or -1 if the page is absent
