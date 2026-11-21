@@ -1,0 +1,10 @@
+## Programming Assignment 4
+`By: Citlali Curiel and Victoria Lin`
+
+Run using
+```bash
+./memsimulator addresses.txt > out.txt
+diff out.txt addresses-correct.txt
+```
+
+To test difference between our output and the expected, address-correct.txt, output
