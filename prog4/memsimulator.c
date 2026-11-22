@@ -23,33 +23,25 @@ typedef struct {
     PageTableEntry entries[PAGE_COUNT];
 } PageTable;
 
-//one TLB entry stores one page-to-frame translation
+//entry has logical page # abd physical frame #
 typedef struct {
-    int page_num; //key, used like idx for getting frame
+    int page_num; //key for accessing a frame
     int frame_num; //val
     bool valid;
 } TLBEntry;
 
 typedef struct {
     TLBEntry entries[TLB_SIZE];
-    int next; //could do pointer or just index of next tlb entry
+    int next;
 } TLB;
-
-//backing store holds contents of virtual pages
-typedef struct {
-    FILE *file;
-} BackingStore;
 
 typedef struct {
     signed char bytes[PAGE_COUNT][PAGE_SIZE];
-    //tracks which page occupies each frame
-    int frame_page[PAGE_COUNT];
-    //tracks when each frame was last accessed, used for LRU
-    size_t last_used[PAGE_COUNT];
-
-    int num_frames; //number of frames allowed for this run
-    int frame_idx;
-    int next_fifo; //next physical frame to replace using FIFO
+    int frame_page[PAGE_COUNT]; //pages stored in each frame
+    size_t last_used[PAGE_COUNT]; //for lru, last access for each frame
+    int num_frames;
+    int frame_idx; //next free frame
+    int next_fifo; //next frame to replace with FIFO
 } PhysicalMemory;
 
 typedef struct {
@@ -60,7 +52,7 @@ typedef struct {
 
 //bits 8-15 is the page number
 unsigned int get_pagenum(unsigned int address){
-    return (address >> 8) & 0xFF;
+    return (address >> 8) & 0xFF; //use bit-masking + shifting to get top 8 bits
 }
 
 //bits 0-7 is the offset
@@ -68,13 +60,13 @@ unsigned int get_pageoffset(unsigned int address){
     return address & 0xFF;
 }
 
-//read all addresses first so OPT can look at future references
+//read all adresses so opt replacement policy can use future references
 int read_addresses(FILE *input, ReferenceSequence *sequence){
     unsigned int address;
     int result;
 
     while ((result = fscanf(input, "%u", &address)) == 1) {
-        //make array larger when runs out of space
+        //make array bigger when runs out of space
         if (sequence->count == sequence->capacity) {
             size_t new_capacity;
 
@@ -84,7 +76,7 @@ int read_addresses(FILE *input, ReferenceSequence *sequence){
                 new_capacity = sequence->capacity * 2;
             }
 
-            //use a temporary pointer so failed realloc does not lose the array
+            //temporary pointer so failed realloc doesn't lose array
             unsigned int *temp = realloc(sequence->addresses, new_capacity * sizeof(unsigned int));
             if (temp == NULL) {
                 printf("Could not allocate the address array\n");
@@ -99,26 +91,10 @@ int read_addresses(FILE *input, ReferenceSequence *sequence){
         sequence->count++;
     }
 
-    //EOF is expected; invalid text or a file error is not
-    if (result != EOF || ferror(input)) {
-        printf("Could not read the addresses\n");
-        return -1;
-    }
-
     return 0;
 }
 
-//prepare physical memory before translating any addresses
-void initialize_memory(PhysicalMemory *memory, int frames){
-    memset(memory, 0, sizeof(*memory));
-    memory->num_frames = frames;
-
-    for (int i = 0; i < PAGE_COUNT; i++) {
-        memory->frame_page[i] = -1; //this frame does not contain a page yet
-    }
-}
-
-//return the frame number on a TLB hit, or -1 on a miss
+//on hit returns frame number
 int lookup_TLB(TLB *tlb, int page_num){
     for (int i = 0; i < TLB_SIZE; i++) {
         if (tlb->entries[i].valid && tlb->entries[i].page_num == page_num) {
@@ -129,26 +105,15 @@ int lookup_TLB(TLB *tlb, int page_num){
     return -1;
 }
 
-//the TLB always uses rotating FIFO, regardless of the selected PRA
+//tlb uses rotating fifo
 void insert_TLB(TLB *tlb, int page_num, int frame_num){
-    int slot = tlb->next;
-    tlb->entries[slot].page_num = page_num;
-    tlb->entries[slot].frame_num = frame_num;
-    tlb->entries[slot].valid = true;
+    int next_entry = tlb->next;
+    tlb->entries[next_entry].page_num = page_num;
+    tlb->entries[next_entry].frame_num = frame_num;
+    tlb->entries[next_entry].valid = true;
 
-    //wrap back to slot 0 after inserting into slot 15
-    tlb->next = (slot + 1) % TLB_SIZE;
-}
-
-//remove a translation when its page is evicted from physical memory
-void invalidate_TLB(TLB *tlb, int page_num){
-    for (int i = 0; i < TLB_SIZE; i++) {
-        if (tlb->entries[i].valid && tlb->entries[i].page_num == page_num) {
-            tlb->entries[i].valid = false;
-        }
-    }
-
-    //do not move next or shift entries when invalidating a slot
+    //for rotating/circular fifo
+    tlb->next = (next_entry + 1) % TLB_SIZE;
 }
 
 //return the resident frame number, or -1 if the page is absent
@@ -161,17 +126,15 @@ int lookup_page_table(PageTable *page_table, int page_num){
 }
 
 //copy one page from the backing store into the selected frame
-int read_backing_store(BackingStore *backing, PhysicalMemory *memory, int page_num, int frame_num){
+int read_backing_store(FILE *backing, PhysicalMemory *memory, int page_num, int frame_num){
     //the file position depends on the logical PAGE, not the physical frame
     long position = (long)page_num * PAGE_SIZE;
-
-    if (fseek(backing->file, position, SEEK_SET) != 0) {
+    if (fseek(backing, position, SEEK_SET) != 0) {
         printf("Could not seek to page %d\n", page_num);
         return -1;
     }
 
-    size_t bytes_read = fread(memory->bytes[frame_num], 1, PAGE_SIZE, backing->file);
-
+    size_t bytes_read = fread(memory->bytes[frame_num], 1, PAGE_SIZE, backing);
     if (bytes_read != PAGE_SIZE) {
         printf("Could not read page %d\n", page_num);
         return -1;
@@ -208,7 +171,6 @@ int choose_frame(PhysicalMemory *memory, ReferenceSequence *sequence, PRA pra, s
 
     } else if (pra == opt) {
         size_t farthest = 0;
-
         for (int frame = 0; frame < memory->num_frames; frame++) {
             int loaded_page = memory->frame_page[frame];
             size_t next = current + 1;
@@ -241,7 +203,7 @@ int choose_frame(PhysicalMemory *memory, ReferenceSequence *sequence, PRA pra, s
 }
 
 //handle a page fault and return the frame containing the requested page
-int load_page(PageTable *page_table, TLB *tlb, PhysicalMemory *memory, BackingStore *backing, ReferenceSequence *sequence, PRA pra, int page_num, size_t current){
+int load_page(PageTable *page_table, TLB *tlb, PhysicalMemory *memory, FILE *backing, ReferenceSequence *sequence, PRA pra, int page_num, size_t current){
     int frame_num = choose_frame(memory, sequence, pra, current);
 
     if (read_backing_store(backing, memory, page_num, frame_num) != 0) {
@@ -253,7 +215,12 @@ int load_page(PageTable *page_table, TLB *tlb, PhysicalMemory *memory, BackingSt
     //if the frame was occupied, remove the old page's mappings
     if (old_page != -1) {
         page_table->entries[old_page].valid = false;
-        invalidate_TLB(tlb, old_page);
+        //remove tlb entry when its page is evicted from physical memory
+        for (int i = 0; i < TLB_SIZE; i++) {
+            if (tlb->entries[i].valid && tlb->entries[i].page_num == page_num) {
+                tlb->entries[i].valid = false;
+            }
+        }
     }
 
     //record the new page-to-frame mapping
@@ -265,7 +232,7 @@ int load_page(PageTable *page_table, TLB *tlb, PhysicalMemory *memory, BackingSt
 }
 
 //translate one address and print its result
-int translate(PageTable *page_table, TLB *tlb, PhysicalMemory *memory, BackingStore *backing, ReferenceSequence *sequence, PRA pra, size_t current, int *page_faults, int *tlb_hits){
+int translate(PageTable *page_table, TLB *tlb, PhysicalMemory *memory, FILE *backing, ReferenceSequence *sequence, PRA pra, size_t current, int *page_faults, int *tlb_hits){
     unsigned int address = sequence->addresses[current];
 
     int page_num = get_pagenum(address);
@@ -365,9 +332,9 @@ int main(int argc, char *argv[]){
         return -1;
     }
 
-    BackingStore backing;
-    backing.file = fopen("BACKING_STORE.bin", "rb");
-    if (backing.file == NULL) {
+    FILE *backing;
+    backing = fopen("BACKING_STORE.bin", "rb");
+    if (backing == NULL) {
         printf("Could not open BACKING_STORE.bin\n");
         free(sequence.addresses);
         return -1;
@@ -378,7 +345,10 @@ int main(int argc, char *argv[]){
     TLB tlb = {0};
 
     PhysicalMemory memory;
-    initialize_memory(&memory, frames);
+    memory.num_frames = frames;
+    for(int i = 0; i < PAGE_COUNT; i++){
+        memory.frame_page[i] = -1;
+    }
 
     int page_faults = 0;
     int tlb_hits = 0;
@@ -411,7 +381,7 @@ int main(int argc, char *argv[]){
         printf("TLB Hit Rate = %.3f\n", tlb_hit_rate);
     }
 
-    fclose(backing.file);
+    fclose(backing);
     free(sequence.addresses);
 
     if (result != 0) {
